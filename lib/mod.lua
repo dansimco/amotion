@@ -6,6 +6,8 @@
 -- @author dansimco (https://github.com/dansimco)
 -- Based on Arcify by Mimetaur (https://github.com/mimetaur)
 
+local mod = require 'core/mods'
+
 local util = require "util"
 local tabutil = require "tabutil"
 
@@ -97,6 +99,11 @@ function Amotion:new (arc_obj)
 	am.dirty = true
 
   -- params
+  params:add_separator(" ")
+  params:add_group("AMOTION", 13)
+  params:add_option("amotion_enabled", "enable", {'no', 'yes'})
+  print("IS ENABLED", params:get("amotion_enabled"))
+
   local map_param_ids = {false}
   local map_param_names = {"none"}
   local pl = params.params
@@ -110,49 +117,49 @@ function Amotion:new (arc_obj)
 	  end
   end
 
-  print("Arc mapping available for:")
-  tabutil.print(map_param_names)
- 
  	for i = 1, 4 do
-	 	params:add_option("m_arc" .. i .. "_target", "Arc " .. i .. " target", map_param_names)
+	 	params:add_option("m_arc" .. i .. "_target", "arc " .. i .. " target", map_param_names)
 	  params:add_number(
 	    "m_arc_" .. i .. "_scale", -- id
-	    "Arc " .. i .." amount", -- name
+	    "arc " .. i .." amount", -- name
 	    0, -- min
 	    100, -- max
 	    0 -- default
 	    )
-	  params:add_option("m_arc_" .. i .. "_wave", "Arc " .. i .. " wave", {"tri", "sin", "saw" })
+	  params:add_option("m_arc_" .. i .. "_wave", "arc " .. i .. " wave", {"tri", "sin", "saw" })
  	end
-
 
 	function redraw_clock_callback ()
 		while true do
-			redraw_arc(am)
+			if params:get("amotion_enabled") == 2 then
+				redraw_arc(am)
+			end
 			clock.sleep(1 / am.fps)
 		end
 	end
 
 	function lfo_clock_callback()
 		while true do
-			for i = 1, 4 do
-				am.position[i] = am.position[i] + am.velocity[i]
-				if am.position[i] > 1 then
-					local overage = am.position[i] - 1 
-					am.position[i] = 0 + overage
-				else if am.position[i] < 0 then
-						am.position[i] = (1 - am.position[i])
+			if params:get("amotion_enabled") == 2 then
+				for i = 1, 4 do
+					am.position[i] = am.position[i] + am.velocity[i]
+					if am.position[i] > 1 then
+						local overage = am.position[i] - 1
+						am.position[i] = 0 + overage
+					else if am.position[i] < 0 then
+							am.position[i] = (1 - am.position[i])
+						end
 					end
-				end
-				local long_val = interpolate(am.position[i], params:get("m_arc_" .. i .. "_wave")) * params:get("m_arc_" .. i .. "_scale")
-				local new_val = math.ceil(long_val * 1000) / 1000
-				am.delta[i] = util.round((new_val - am.value[i])*100) / 100
-				am.value[i] = new_val
-				local target_param_id = map_param_ids[params:get("m_arc" .. i .. "_target")]
-				if target_param_id ~= false then
-					params:delta(target_param_id, am.delta[i])
-				end
+					local long_val = interpolate(am.position[i], params:get("m_arc_" .. i .. "_wave")) * params:get("m_arc_" .. i .. "_scale")
+					local new_val = math.ceil(long_val * 1000) / 1000
+					am.delta[i] = util.round((new_val - am.value[i])*100) / 100
+					am.value[i] = new_val
+					local target_param_id = map_param_ids[params:get("m_arc" .. i .. "_target")]
+					if target_param_id ~= false then
+						params:delta(target_param_id, am.delta[i])
+					end
 
+				end
 			end
 			clock.sleep(LFO_SR / 1000)
 		end
@@ -161,9 +168,18 @@ function Amotion:new (arc_obj)
 	local rcid = clock.run(redraw_clock_callback)
 	local lfocid = clock.run(lfo_clock_callback)
 
+	local existing_arc_callback = am.ar.delta
+
   function am.ar.delta(n, delta)
-      am:update(n, delta)
+  	if existing_arc_callback then existing_arc_callback(n,delta) end
+  	if params:get("amotion_enabled") == 2 then
+			am:update(n, delta)
+	  end
   end
+
+
+
+
 
 	return am
 end
@@ -172,8 +188,30 @@ function Amotion:update (n, delta)
 	self.velocity[n] = self.velocity[n]+delta / (1000000 / self.acceleration)
 end
 
+function Amotion:is_enabled ()
+	if params:get("amotion_enabled") == 2 then
+		return true
+	else
+		return false
+	end
+end
+
 function Amotion:map_param (param, i)
 
 end
 
-return Amotion
+
+
+mod.hook.register("script_pre_init", "amotion", function()
+	local script_init = init
+
+	init = function ()
+		script_init()
+			print("INIT AMOTION")
+		amotion = Amotion.new()
+	end
+
+end)
+
+
+
