@@ -86,6 +86,7 @@ function Amotion:new (arc_obj)
 	local am = {}
 	setmetatable(am, Amotion)
 
+	local arc = util.file_exists(_path.code.."toga") and include "toga/lib/togaarc" or arc
 	am.ar = arc_obj or arc.connect()
 
 	am.position = { 0.01, 0.01, 0.01, 0.01 }
